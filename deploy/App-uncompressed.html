@@ -17,7 +17,8 @@ Ext.define('CustomApp', {
 
     	app = this;
 
-    	app.iterationName = "Iteration 1";
+    	// app.iterationName = "Iteration 1";
+    	app.iterationName = null;
 
     	app.iterationFilter = app.iterationName !== null  ? 
     		app._createIterationNameFilter(app.iterationName) :
@@ -30,8 +31,7 @@ Ext.define('CustomApp', {
     		// readAllIterations,
     		app.readCFDs,
     		app.createChartData,
-    		// createCalculator,
-    		// createChart
+    		app.createChart
     	];
 
     	async.waterfall( fns , function(err,result) {
@@ -43,12 +43,13 @@ Ext.define('CustomApp', {
 
     readIterations : function(callback) {
     	app._wsapiQuery(
-    		{ model : "Iteration",
-              fetch : true,
-              filters : app.iterationFilter //[app._createTodayFilter()]
+    		{ 
+    			model : "Iteration",
+              	fetch : true,
+              	filters : app.iterationFilter //[app._createTodayFilter()]
           	},
           	function(error,results) {
-          		console.log("results",results)
+          		console.log("iteration results",results)
       			callback(null,results);
       		}
       	);
@@ -56,9 +57,10 @@ Ext.define('CustomApp', {
 
     readCFDs : function(iterations,callback) {
     	app._wsapiQuery(
-    		{ model : "IterationCumulativeFlowData",
-              fetch : true,
-              filters : [app._createIterationsFilter(iterations)]
+    		{ 
+    			model : "IterationCumulativeFlowData",
+              	fetch : true,
+              	filters : [app._createIterationsFilter(iterations)]
           	},
           	function(error,results) {
           		console.log("results",results)
@@ -77,14 +79,14 @@ Ext.define('CustomApp', {
     		var groupedByDay = _.groupBy(cfds,function(cfd) { return moment(cfd.raw.CreationDate).format("YYYY-MM-DD") /* ISO Value */ } );
 
 	    	var dailyTotals = _.map(_.keys(groupedByDay),function(key) {
-	    		var cfds = groupedByDay[key];
+	    		var dailyCfds = groupedByDay[key];
 	    		return {
 	    			day : key,
-	    			scope : _.reduce(cfds,function(memo,record) { 
-	    				return memo + record.get("CardEstimateTotal")
+	    			scope : _.reduce(dailyCfds,function(memo,record) { 
+	    				return memo + record.get("CardEstimateTotal") // Defined : 10 In-Progress : 8 = 18
 	    			},0),
-	    			todo : _.reduce(cfds,function(memo,record) { 
-	    				// also need to check for post Accepted values
+	    			todo : _.reduce(dailyCfds,function(memo,record) { 
+	    				// also need to check for post Accepted values eg. "Released"
 	    				return memo + ( record.get("CardState") !== "Accepted" ? record.get("CardEstimateTotal") : 0)
 	    			},0)
 	    		}
@@ -107,6 +109,59 @@ Ext.define('CustomApp', {
     	});
 
     	callback(null,iterationsData);
+    },
+
+    createChart : function( iterationsData, callback ) {
+
+    	var data = _.first(iterationsData).data;
+    	console.log("data",data);
+
+    	var store = Ext.create('Ext.data.JsonStore', {
+    		fields : ["day","scope","todo"],
+		    data: data
+		    // { day : "", scope: 0, todo : 0}
+	        // { temperature: 58, date: new Date(2011, 1, 1, 8) },
+		});
+
+    	
+    	var chart = Ext.create('Ext.chart.Chart', {
+		   // renderTo: Ext.getBody(),
+		   width: app.getWidth(),
+		   height: app.getHeight(),
+		   store: store,
+		    series: [
+		        {
+		            type: 'line',
+		            xField: 'day',
+		            yField: 'scope'
+		        },
+		        {
+		            type: 'line',
+		            xField: 'day',
+		            yField: 'todo'
+		        }
+	    	],
+		   	axes: [
+		        {
+		            title: 'Points',
+		            type: 'Numeric',
+		            position: 'left',
+		            fields: ['scope','todo'],
+		        },
+		        {
+		            title: 'Day',
+		            type: 'Category',
+		            position: 'bottom',
+		            fields: ['day'],
+		            // dateFormat: 'ga'
+		        }
+		    ]
+		});
+
+		app.add(chart);
+
+		callback(null,iterationsData);
+
     },
 
     _createTodayFilter : function() {
