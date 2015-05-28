@@ -7,8 +7,8 @@ Ext.define('CustomApp', {
 
     	app = this;
 
-    	// app.iterationName = "Iteration 1";
-    	app.iterationName = null;
+    	app.iterationName = "Iteration 1";
+    	// app.iterationName = null;
 
     	app.iterationFilter = app.iterationName !== null  ? 
     		app._createIterationNameFilter(app.iterationName) :
@@ -61,26 +61,56 @@ Ext.define('CustomApp', {
 
     createChartData : function(cfds,iterations,callback) {
 
+    	var daysArray = function(iteration) {
+    		var days = [];
+    		var m = moment(iteration.raw.StartDate);
+    		while(m <= moment(iteration.raw.EndDate)) {
+    			days.push( m.format("YYYY-MM-DD"));
+    			m = m.add(1,"days");
+    		}
+    		console.log("days",days);
+    		return days;
+    	}
+
     	var iterationKey = function(i) {
     		return i.raw.Name + moment(i.raw.StartDate).format("YYYY-MM-DD") + moment(i.raw.EndDate).format("YYYY-MM-DD");
     	}
 
-    	var summarizeIteration = function(cfds) {
-    		var groupedByDay = _.groupBy(cfds,function(cfd) { return moment(cfd.raw.CreationDate).format("YYYY-MM-DD") /* ISO Value */ } );
+    	var calcIdeal = function( vals ) {
+    		var max = _.max(vals);
+    		console.log(vals,max);
+    		return _.map(vals,function(v,i) {
+    			return (max / (vals.length)) * (vals.length - i);
+    		})
+    	}
 
-	    	var dailyTotals = _.map(_.keys(groupedByDay),function(key) {
-	    		var dailyCfds = groupedByDay[key];
-	    		return {
-	    			day : key,
-	    			scope : _.reduce(dailyCfds,function(memo,record) { 
-	    				return memo + record.get("CardEstimateTotal") // Defined : 10 In-Progress : 8 = 18
-	    			},0),
-	    			todo : _.reduce(dailyCfds,function(memo,record) { 
-	    				// also need to check for post Accepted values eg. "Released"
-	    				return memo + ( record.get("CardState") !== "Accepted" ? record.get("CardEstimateTotal") : 0)
-	    			},0)
-	    		}
+    	var summarizeIteration = function(cfds,iterations) {
+    		var groupedByDay = _.groupBy(cfds,function(cfd) { return moment(cfd.raw.CreationDate).format("YYYY-MM-DD") /* ISO Value */ } );
+    		var days = daysArray(_.first(iterations));
+			var dailyTotals = _.map(days,function(day) {
+	    		var dailyCfds = groupedByDay[day];
+	    		if (_.isUndefined(dailyCfds)) {
+	    			return { day : day, scope : null, todo : null }
+	    		} else {
+	    			return {
+		    			day : day,
+		    			scope : _.reduce(dailyCfds,function(memo,record) { 
+		    				return memo + record.get("CardEstimateTotal") // Defined : 10 In-Progress : 8 = 18
+		    			},0),
+		    			todo : _.reduce(dailyCfds,function(memo,record) { 
+		    				// also need to check for post Accepted values eg. "Released"
+		    				return memo + ( record.get("CardState") !== "Accepted" ? record.get("CardEstimateTotal") : 0)
+		    			},0)
+		    		}
+		    	}
+	    	});
+	    	// create ideal line
+	    	var ideal = calcIdeal( _.pluck( dailyTotals, 'scope'));
+	    	_.each(dailyTotals,function(d,i){
+	    		d['ideal'] = ideal[i];
 	    	})
+	    	console.log("ideal",ideal);
+
 	    	return dailyTotals;
     	}
 
@@ -93,8 +123,10 @@ Ext.define('CustomApp', {
     		var uiCFDS = _.filter(cfds,function(cfdRec) {
     			return iOids.indexOf(cfdRec.get("IterationObjectID"))!==-1;
     		})
-    		return { key : iKey, 
-    				 data : summarizeIteration(uiCFDS)
+    		return { 
+    			key : iKey, 
+				data : summarizeIteration(uiCFDS,uniqueIterations[iKey]),
+    			iterations : uniqueIterations[iKey]
     		}
     	});
 
@@ -103,14 +135,12 @@ Ext.define('CustomApp', {
 
     createChart : function( iterationsData, callback ) {
 
+    	// only chart the first item.
     	var data = _.first(iterationsData).data;
-    	console.log("data",data);
 
     	var store = Ext.create('Ext.data.JsonStore', {
-    		fields : ["day","scope","todo"],
+    		fields : ["day","scope","todo","ideal"],
 		    data: data
-		    // { day : "", scope: 0, todo : 0}
-	        // { temperature: 58, date: new Date(2011, 1, 1, 8) },
 		});
 
     	
@@ -119,7 +149,13 @@ Ext.define('CustomApp', {
 		   width: app.getWidth(),
 		   height: app.getHeight(),
 		   store: store,
-		    series: [
+		   series: [
+   		        {
+		            type: 'line',
+		            xField: 'day',
+		            yField: 'ideal'
+		        },
+
 		        {
 		            type: 'line',
 		            xField: 'day',
