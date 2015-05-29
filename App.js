@@ -7,8 +7,8 @@ Ext.define('CustomApp', {
 
     	app = this;
 
-    	app.iterationName = "Iteration 1";
-    	// app.iterationName = null;
+    	// app.iterationName = "Iteration 1";
+    	app.iterationName = null;
 
     	app.iterationFilter = app.iterationName !== null  ? 
     		app._createIterationNameFilter(app.iterationName) :
@@ -80,7 +80,8 @@ Ext.define('CustomApp', {
     		var max = _.max(vals);
     		console.log(vals,max);
     		return _.map(vals,function(v,i) {
-    			return (max / (vals.length)) * (vals.length - i);
+    			// return (max / (vals.length)) * (vals.length - i);
+    			return ((max / (vals.length - 1)) * (vals.length - (i+1)));
     		})
     	}
 
@@ -90,7 +91,7 @@ Ext.define('CustomApp', {
 			var dailyTotals = _.map(days,function(day) {
 	    		var dailyCfds = groupedByDay[day];
 	    		if (_.isUndefined(dailyCfds)) {
-	    			return { day : day, scope : null, todo : null }
+	    			return { day : day, scope : "", todo : "" }
 	    		} else {
 	    			return {
 		    			day : day,
