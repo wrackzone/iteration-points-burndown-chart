@@ -17,8 +17,8 @@ Ext.define('CustomApp', {
 
     	app = this;
 
-    	// app.iterationName = "Iteration 1";
-    	app.iterationName = null;
+    	app.iterationName = "Iteration 1";
+    	// app.iterationName = null;
 
     	app.iterationFilter = app.iterationName !== null  ? 
     		app._createIterationNameFilter(app.iterationName) :
@@ -154,36 +154,62 @@ Ext.define('CustomApp', {
 		    data: data
 		});
 
+		var tips = {
+			trackMouse: true,  frame: true, border: true,
+            height: 30, width: 150, fbar: null,
+			renderer: function(storeItem, item) {
+    			console.log(storeItem,item);
+    			this.setTitle(storeItem.get('day') + " - " + item.series.yField + ' : ' + storeItem.data[item.series.yField] );
+			}
+   		};
     	
     	var chart = Ext.create('Ext.chart.Chart', {
 		   // renderTo: Ext.getBody(),
 		   width: app.getWidth(),
 		   height: app.getHeight(),
+		   colors: ['#000000', '#89A54E', '#AA4643', '#3366FF'],
 		   store: store,
+		   legend : true,
 		   series: [
    		        {
 		            type: 'line',
 		            xField: 'day',
-		            yField: 'ideal'
-		        },
-
+		            yField: 'ideal',
+		            tips : tips
+		       	},
 		        {
 		            type: 'line',
 		            xField: 'day',
-		            yField: 'scope'
+		            yField: 'scope',
+		            tips : tips
 		        },
 		        {
 		            type: 'line',
 		            xField: 'day',
-		            yField: 'todo'
+		            yField: 'todo',
+		            tips : tips
 		        }
 	    	],
+	    	tips: {
+               trackMouse: true,
+               style: 'background: # ',
+               frame: true,
+               border: true,
+               borderWidth: 10,
+               height: 30,
+               width: 150,
+               fbar: null,
+               renderer: function(storeItem, item) {
+					console.log("in tip", storeItem, item);
+                  	this.setTitle(storeItem.get('day') + ': ' + storeItem.get('todo') + ' Points');
+               }
+			},
 		   	axes: [
 		        {
 		            title: 'Points',
 		            type: 'Numeric',
 		            position: 'left',
-		            fields: ['scope','todo'],
+		            fields: ['scope','todo','ideal'],
 		        },
 		        {
 		            title: 'Day',
