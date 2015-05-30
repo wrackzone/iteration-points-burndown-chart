@@ -145,11 +145,11 @@ Ext.define('CustomApp', {
 		});
 
 		var tips = {
-			trackMouse: true,  frame: true, border: true,
-            height: 30, width: 150, fbar: null,
+			// trackMouse: true,  frame: true, border: true,
+            // height: 30, width: 150, fbar: null,
 			renderer: function(storeItem, item) {
-    			console.log(storeItem,item);
-    			this.setTitle(storeItem.get('day') + " - " + item.series.yField + ' : ' + storeItem.data[item.series.yField] );
+    			// console.log(storeItem,item);
+    			this.setTitle(storeItem.get('day') + " - " + item.series.yField + ' : ' + Math.round(storeItem.data[item.series.yField] * 100) / 100 );
 			}
    		};
     	
@@ -180,20 +180,6 @@ Ext.define('CustomApp', {
 		            tips : tips
 		        }
 	    	],
-	    	tips: {
-               trackMouse: true,
-               style: 'background: # ',
-               frame: true,
-               border: true,
-               borderWidth: 10,
-               height: 30,
-               width: 150,
-               fbar: null,
-               renderer: function(storeItem, item) {
-					console.log("in tip", storeItem, item);
-                  	this.setTitle(storeItem.get('day') + ': ' + storeItem.get('todo') + ' Points');
-               }
-			},
 		   	axes: [
 		        {
 		            title: 'Points',
