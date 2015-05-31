@@ -194,10 +194,7 @@ Ext.define('CustomApp', {
 		});
 
 		var tips = {
-			// trackMouse: true,  frame: true, border: true,
-            // height: 30, width: 150, fbar: null,
 			renderer: function(storeItem, item) {
-    			// console.log(storeItem,item);
     			this.setTitle(storeItem.get('day') + " - " + item.series.yField + ' : ' + Math.round(storeItem.data[item.series.yField] * 100) / 100 );
 			}
    		};
@@ -219,19 +216,30 @@ Ext.define('CustomApp', {
 			            type: 'line',
 			            xField: 'day',
 			            yField: 'ideal',
-			            tips : tips
+			            tips : tips,
+			            markerConfig: {
+		                    radius : 1
+                		}
 			       	},
 			        {
 			            type: 'line',
 			            xField: 'day',
 			            yField: 'scope',
-			            tips : tips
+			            tips : tips,
+			            markerConfig: {
+		                    radius : 1
+                		}
+
 			        },
 			        {
 			            type: 'line',
 			            xField: 'day',
 			            yField: 'todo',
-			            tips : tips
+			            tips : tips,
+			            markerConfig: {
+		                    radius : 2
+                		}
+
 			        }
 		    	],
 			   	axes: [
