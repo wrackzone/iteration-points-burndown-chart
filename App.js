@@ -2,34 +2,83 @@ var app = null;
 
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
+    settingsScope: 'app',
     componentCls: 'app',
+    config: {
+        defaultSettings: {
+            iteration : ""
+        }
+    },
+
     launch: function() {
 
     	app = this;
+    	app.iterationName = null;
 
-    	app.iterationName = "Iteration 1";
-    	// app.iterationName = null;
+    	var iterationSetting = this.getSetting('iteration');
+    	console.log("setting",iterationSetting);
 
-    	app.iterationFilter = app.iterationName !== null  ? 
-    		app._createIterationNameFilter(app.iterationName) :
-    		app._createTodayFilter();
-
-    	console.log("Filter",app.iterationFilter.toString());
+    	// first check if iteration has been configured as a setting
+    	if (!_.isUndefined(iterationSetting)&&!_.isNull(iterationSetting)&&(iterationSetting!=="")) {
+            app.iterationName = iterationSetting;
+        } else {
+        	// otherwise check to see if we are running in a timebox scoped dashboard
+        	var timeboxIteration = app.getTimeboxScope();
+        	if (timeboxIteration!==null) {
+        		app.iterationName = timeboxIteration;
+        	}
+        }
+        console.log("app.iterationName",app.iterationName);
+        app.run(app.iterationName);
     	
-    	var fns = [
-    		app.readIterations,
-    		// readAllIterations,
-    		app.readCFDs,
-    		app.createChartData,
-    		app.createChart
-    	];
+    },
 
-    	async.waterfall( fns , function(err,result) {
-			console.log("final results",result);
-		});
+    run : function(iterationName) {
 
+        // if name is not specified then check for a current iteration
+        app.iterationFilter = iterationName !== null  ? 
+            app._createIterationNameFilter(iterationName) :
+            app._createTodayFilter();
+
+        console.log("Filter",app.iterationFilter.toString());
+        
+        var fns = [
+            app.readIterations,
+            app.readCFDs,
+            app.createChartData,
+            app.createChart
+        ];
+
+        async.waterfall( fns , function(err,result) {
+            console.log("final results",result);
+        });
 
     },
+
+	getSettingsFields : function() {
+ 		return [
+	        {
+	            name: 'iteration',
+	         	xtype: 'rallytextfield',
+	        }
+	    ];
+	},
+
+	getTimeboxScope : function() {
+		var timeboxScope = this.getContext().getTimeboxScope();
+		if ((timeboxScope) && (timeboxScope.getType() === 'iteration')) {
+			var record = timeboxScope.getRecord();
+        	var name = record.get('Name');
+        	return name;
+        }
+        return null;
+    },
+
+    onTimeboxScopeChange: function(newTimeboxScope) {
+	    this.callParent(arguments);
+	    console.log("newTimeboxScope",newTimeboxScope);
+        app.run(newTimeboxScope.getRecord().get("Name"));
+	},
 
     readIterations : function(callback) {
     	app._wsapiQuery(
@@ -137,11 +186,11 @@ Ext.define('CustomApp', {
     createChart : function( iterationsData, callback ) {
 
     	// only chart the first item.
-    	var data = _.first(iterationsData).data;
+    	app.data = _.first(iterationsData).data;
 
-    	var store = Ext.create('Ext.data.JsonStore', {
+    	app.store = Ext.create('Ext.data.JsonStore', {
     		fields : ["day","scope","todo","ideal"],
-		    data: data
+		    data: app.data
 		});
 
 		var tips = {
@@ -152,52 +201,57 @@ Ext.define('CustomApp', {
     			this.setTitle(storeItem.get('day') + " - " + item.series.yField + ' : ' + Math.round(storeItem.data[item.series.yField] * 100) / 100 );
 			}
    		};
-    	
-    	var chart = Ext.create('Ext.chart.Chart', {
-		   // renderTo: Ext.getBody(),
-		   width: app.getWidth(),
-		   height: app.getHeight(),
-		   colors: ['#000000', '#89A54E', '#AA4643', '#3366FF'],
-		   store: store,
-		   legend : true,
-		   series: [
-   		        {
-		            type: 'line',
-		            xField: 'day',
-		            yField: 'ideal',
-		            tips : tips
-		       	},
-		        {
-		            type: 'line',
-		            xField: 'day',
-		            yField: 'scope',
-		            tips : tips
-		        },
-		        {
-		            type: 'line',
-		            xField: 'day',
-		            yField: 'todo',
-		            tips : tips
-		        }
-	    	],
-		   	axes: [
-		        {
-		            title: 'Points',
-		            type: 'Numeric',
-		            position: 'left',
-		            fields: ['scope','todo','ideal'],
-		        },
-		        {
-		            title: 'Day',
-		            type: 'Category',
-		            position: 'bottom',
-		            fields: ['day'],
-		            // dateFormat: 'ga'
-		        }
-		    ]
-		});
 
-		app.add(chart);
+   		if (!_.isUndefined(app.chart)) {
+   			// app.chart.remove();
+   			app.remove(app.chart);
+   		}
+    	
+	    	app.chart = Ext.create('Ext.chart.Chart', {
+			   // renderTo: Ext.getBody(),
+			   width: app.getWidth(),
+			   height: app.getHeight(),
+			   colors: ['#000000', '#89A54E', '#AA4643', '#3366FF'],
+			   store: app.store,
+			   legend : true,
+			   series: [
+	   		        {
+			            type: 'line',
+			            xField: 'day',
+			            yField: 'ideal',
+			            tips : tips
+			       	},
+			        {
+			            type: 'line',
+			            xField: 'day',
+			            yField: 'scope',
+			            tips : tips
+			        },
+			        {
+			            type: 'line',
+			            xField: 'day',
+			            yField: 'todo',
+			            tips : tips
+			        }
+		    	],
+			   	axes: [
+			        {
+			            title: 'Points',
+			            type: 'Numeric',
+			            position: 'left',
+			            fields: ['scope','todo','ideal'],
+			        },
+			        {
+			            title: 'Day',
+			            type: 'Category',
+			            position: 'bottom',
+			            fields: ['day'],
+			            // dateFormat: 'ga'
+			        }
+			    ]
+			});
+
+			app.add(app.chart);
 
 		callback(null,iterationsData);
 
