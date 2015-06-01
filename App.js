@@ -43,6 +43,7 @@ Ext.define('CustomApp', {
         console.log("Filter",app.iterationFilter.toString());
         
         var fns = [
+        	app.readLastState,
             app.readIterations,
             app.readCFDs,
             app.createChartData,
@@ -50,7 +51,7 @@ Ext.define('CustomApp', {
         ];
 
         async.waterfall( fns , function(err,result) {
-            console.log("final results",result);
+            // console.log("final results",result);
         });
 
     },
@@ -76,8 +77,26 @@ Ext.define('CustomApp', {
 
     onTimeboxScopeChange: function(newTimeboxScope) {
 	    this.callParent(arguments);
-	    console.log("newTimeboxScope",newTimeboxScope);
+	    // console.log("newTimeboxScope",newTimeboxScope);
         app.run(newTimeboxScope.getRecord().get("Name"));
+	},
+
+	readLastState : function(callback) {
+
+		Rally.data.ModelFactory.getModel({
+		    type: 'UserStory',
+		    success: function(model) {
+		        model.getField('ScheduleState').getAllowedValueStore().load({
+		            callback: function(records, operation, success) {
+		            	console.log(records);
+		            	app.lastState = _.last(records).get("StringValue");
+		            	console.log("lastState",app.lastState);
+		        		callback(null);
+		            }
+		        });
+		    }
+		});
+
 	},
 
     readIterations : function(callback) {
@@ -88,7 +107,7 @@ Ext.define('CustomApp', {
               	filters : app.iterationFilter //[app._createTodayFilter()]
           	},
           	function(error,results) {
-          		console.log("iteration results",results)
+          		// console.log("iteration results",results)
       			callback(null,results);
       		}
       	);
@@ -102,7 +121,7 @@ Ext.define('CustomApp', {
               	filters : [app._createIterationsFilter(iterations)]
           	},
           	function(error,results) {
-          		console.log("results",results)
+          		// console.log("results",results)
       			callback(null,results,iterations);
       		}
       	);
@@ -117,7 +136,7 @@ Ext.define('CustomApp', {
     			days.push( m.format("YYYY-MM-DD"));
     			m = m.add(1,"days");
     		}
-    		console.log("days",days);
+    		// console.log("days",days);
     		return days;
     	}
 
@@ -127,7 +146,7 @@ Ext.define('CustomApp', {
 
     	var calcIdeal = function( vals ) {
     		var max = _.max(vals);
-    		console.log(vals,max);
+    		// console.log(vals,max);
     		return _.map(vals,function(v,i) {
     			// return (max / (vals.length)) * (vals.length - i);
     			return ((max / (vals.length - 1)) * (vals.length - (i+1)));
@@ -135,6 +154,15 @@ Ext.define('CustomApp', {
     	}
 
     	var summarizeIteration = function(cfds,iterations) {
+
+    		var accepted = function(state) {
+    			return state === "Accepted" || state === app.lastState;
+    		}
+
+    		var pointsValue = function(value) {
+    			return !_.isUndefined(value) && !_.isNull(value) ? value : 0;
+    		}
+
     		var groupedByDay = _.groupBy(cfds,function(cfd) { return moment(cfd.raw.CreationDate).format("YYYY-MM-DD") /* ISO Value */ } );
     		var days = daysArray(_.first(iterations));
 			var dailyTotals = _.map(days,function(day) {
@@ -149,7 +177,7 @@ Ext.define('CustomApp', {
 		    			},0),
 		    			todo : _.reduce(dailyCfds,function(memo,record) { 
 		    				// also need to check for post Accepted values eg. "Released"
-		    				return memo + ( record.get("CardState") !== "Accepted" ? record.get("CardEstimateTotal") : 0)
+		    				return memo + (!accepted(record.get("CardState")) ? pointsValue(record.get("CardEstimateTotal")) : 0 )
 		    			},0)
 		    		}
 		    	}
@@ -159,17 +187,15 @@ Ext.define('CustomApp', {
 	    	_.each(dailyTotals,function(d,i){
 	    		d['ideal'] = ideal[i];
 	    	})
-	    	console.log("ideal",ideal);
+	    	//console.log("ideal",ideal);
 
 	    	return dailyTotals;
     	}
 
     	var uniqueIterations = _.groupBy(iterations,iterationKey);
-    	console.log("icfds",uniqueIterations);
 
     	var iterationsData = _.map( _.keys(uniqueIterations), function(iKey) {
     		var iOids = _.map(uniqueIterations[iKey], function(ui) { return ui.get("ObjectID") });
-    		console.log("iOids",iOids);
     		var uiCFDS = _.filter(cfds,function(cfdRec) {
     			return iOids.indexOf(cfdRec.get("IterationObjectID"))!==-1;
     		})
@@ -185,7 +211,6 @@ Ext.define('CustomApp', {
 
     createChart : function( iterationsData, callback ) {
 
-    	// only chart the first item.
     	app.data = _.first(iterationsData).data;
 
     	app.store = Ext.create('Ext.data.JsonStore', {
@@ -200,75 +225,82 @@ Ext.define('CustomApp', {
    		};
 
    		if (!_.isUndefined(app.chart)) {
-   			// app.chart.remove();
    			app.remove(app.chart);
    		}
+
+   		var title = _.first(_.first(iterationsData).iterations).get("Name");
     	
-	    	app.chart = Ext.create('Ext.chart.Chart', {
-			   // renderTo: Ext.getBody(),
-			   width: app.getWidth(),
-			   height: app.getHeight(),
-			   colors: ['#000000', '#89A54E', '#AA4643', '#3366FF'],
-			   store: app.store,
-			   legend : true,
-			   series: [
-	   		        {
-			            type: 'line',
-			            xField: 'day',
-			            yField: 'ideal',
-			            tips : tips,
-			            markerConfig: {
-		                    radius : 1
-                		}
-			       	},
-			        {
-			            type: 'line',
-			            xField: 'day',
-			            yField: 'scope',
-			            tips : tips,
-			            markerConfig: {
-		                    radius : 1
-                		}
-
-			        },
-			        {
-			            type: 'line',
-			            xField: 'day',
-			            yField: 'todo',
-			            tips : tips,
-			            markerConfig: {
-		                    radius : 2
-                		}
-
-			        }
-		    	],
-			   	axes: [
-			        {
-			            title: 'Points',
-			            type: 'Numeric',
-			            position: 'left',
-			            fields: ['scope','todo','ideal'],
-			        },
-			        {
-			            title: 'Day',
-			            type: 'Category',
-			            position: 'bottom',
-			            fields: ['day'],
-			            // dateFormat: 'ga'
-			        }
-			    ]
-			});
-
-			app.add(app.chart);
-
+    	app.chart = Ext.create('Ext.chart.Chart', {
+		   // renderTo: Ext.getBody(),
+		   width: app.getWidth(),
+		   height: app.getHeight(),
+		   // colors: ['#000000', '#89A54E', '#AA4643', '#3366FF'],
+		   store: app.store,
+		   legend: {
+				position: 'top'
+			},
+		   series: [
+   		        {
+		            type: 'line',
+		            xField: 'day',
+		            yField: 'ideal',
+		            tips : tips,
+		            markerConfig: {
+	                    radius : 1
+            		}
+		       	},
+		        {
+		            type: 'line',
+		            xField: 'day',
+		            yField: 'scope',
+		            tips : tips,
+		            markerConfig: {
+	                    radius : 1
+            		}
+		        },
+		        {
+		            type: 'line',
+		            xField: 'day',
+		            yField: 'todo',
+		            tips : tips,
+		            markerConfig: {
+	                    radius : 2
+            		}
+		        }
+	    	],
+		   	axes: [
+		        {
+		            title: 'Points',
+		            type: 'Numeric',
+		            position: 'left',
+		            fields: ['scope','todo','ideal'],
+		        },
+		        {
+		            title: 'Day',
+		            type: 'Category',
+		            position: 'bottom',
+		            fields: ['day'],
+		            // dateFormat: 'ga'
+		        }
+		    ],
+		    items: [{
+			      type  : 'text',
+			      text  : title,
+			      font  : '14px Arial',
+			      width : 100,
+			      height: 30,
+			      x : 150, //the sprite x position
+			      y : 26  //the sprite y position
+			   }]
+		});
+		app.add(app.chart);
 		callback(null,iterationsData);
-
     },
 
     _createTodayFilter : function() {
 
     	var isoToday = Rally.util.DateTime.toIsoString(new Date(), false);
-    	console.log(isoToday);
+    	// console.log(isoToday);
 
 		var filter = Ext.create('Rally.data.wsapi.Filter', {
      		property: 'StartDate',
@@ -309,7 +341,6 @@ Ext.define('CustomApp', {
 			filter = (filter===null) ? f : filter.or(f);
 
 		})
-
      	return filter;
 	},
 
