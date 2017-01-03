@@ -219,6 +219,7 @@ Ext.define('CustomApp', {
 		});
 
 		var tips = {
+			trackMouse: false,
 			renderer: function(storeItem, item) {
     			this.setTitle(storeItem.get('day') + " - " + item.series.yField + ' : ' + Math.round(storeItem.data[item.series.yField] * 100) / 100 );
 			}
